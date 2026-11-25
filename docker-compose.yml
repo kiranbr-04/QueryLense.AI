@@ -1,0 +1,62 @@
+services:
+  app-db:
+    image: postgres:16-alpine
+    container_name: querylens-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: querylens_app
+      POSTGRES_USER: querylens_user
+      POSTGRES_PASSWORD: querylens_secure_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U querylens_user -d querylens_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    container_name: querylens-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://querylens_user:querylens_secure_pass@app-db:5432/querylens_app
+      SECRET_KEY: querylens-super-secret-key-change-in-production-32bytes!
+      ENCRYPTION_KEY: uK23k_Oq96ZcZ_bHnI8K_bN_6uV3mR7p8G1s_0oJk9Y=
+      DEFAULT_LLM_PROVIDER: mock # or gemini, openai, anthropic, ollama
+      ALLOW_PRIVATE_IPS: "true"
+    ports:
+      - "8000:8000"
+    depends_on:
+      app-db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: querylens-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  mysql-sample:
+    image: mysql:8.0
+    container_name: querylens-sample-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_sample_password
+      MYSQL_DATABASE: enterprise_sales
+      MYSQL_USER: sales_user
+      MYSQL_PASSWORD: sales_password_123
+    ports:
+      - "3306:3306"
+
+volumes:
+  pgdata:
